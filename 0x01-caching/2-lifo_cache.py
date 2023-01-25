@@ -1,42 +1,53 @@
 #!/usr/bin/python3
-""" LIFO Caching """
+"""LIFO Cache Replacement Implementation Class
+"""
+from threading import RLock
 
-from base_caching import BaseCaching
+BaseCaching = __import__('base_caching').BaseCaching
 
 
 class LIFOCache(BaseCaching):
-    """ LIFO caching """
+    """
+    An implementation of LIFO(Last In Fisrt Out) Cache
 
+    Attributes:
+        __keys (list): Stores cache keys in order of entry using `.append`
+        __rlock (RLock): Lock accessed resources to prevent race condition
+    """
     def __init__(self):
-        """ Constructor """
+        """ Instantiation method, sets instance attributes
+        """
         super().__init__()
-        self.queue = []
+        self.__keys = []
+        self.__rlock = RLock()
 
     def put(self, key, item):
-        """ Puts item in cache """
-        if key is None or item is None:
-            return
-
-        self.cache_data[key] = item
-
-        if len(self.cache_data) > BaseCaching.MAX_ITEMS:
-            if self.queue:
-                last = self.queue.pop()
-                del self.cache_data[last]
-                print("DISCARD: {}".format(last))
-
-        if key not in self.queue:
-            self.queue.append(key)
-        else:
-            self.mv_last_list(key)
+        """ Add an item in the cache
+        """
+        if key is not None and item is not None:
+            keyOut = self._balance(key)
+            with self.__rlock:
+                self.cache_data.update({key: item})
+            if keyOut is not None:
+                print('DISCARD: {}'.format(keyOut))
 
     def get(self, key):
-        """ Gets item from cache """
-        return self.cache_data.get(key, None)
+        """ Get an item by key
+        """
+        with self.__rlock:
+            return self.cache_data.get(key, None)
 
-    def mv_last_list(self, item):
-        """ Moves element to last idx of list """
-        length = len(self.queue)
-        if self.queue[length - 1] != item:
-            self.queue.remove(item)
-            self.queue.append(item)
+    def _balance(self, keyIn):
+        """ Removes the earliest item from the cache at MAX size
+        """
+        keyOut = None
+        with self.__rlock:
+            keysLength = len(self.__keys)
+            if keyIn not in self.__keys:
+                if len(self.cache_data) == BaseCaching.MAX_ITEMS:
+                    keyOut = self.__keys.pop(keysLength - 1)
+                    self.cache_data.pop(keyOut)
+            else:
+                self.__keys.remove(keyIn)
+            self.__keys.insert(keysLength, keyIn)
+        return keyOut
